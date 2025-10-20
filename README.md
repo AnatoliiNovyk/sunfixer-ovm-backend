@@ -245,6 +245,7 @@ src/
 - `createdb: command not found` on Windows: add `C:\\Program Files\\PostgreSQL\\XX\\bin` to PATH or use pgAdmin
 - Auth error `28P01`: check `.env` DB_USER/DB_PASSWORD, verify with `psql -U postgres -h localhost`
 - Ensure all 4 secrets are generated and present in `.env` before migrations
+- **Environment variables not loading**: Make sure files that use `process.env` have `require('dotenv').config()` at the top. Connection issues often stem from missing dotenv loading.
 
 ## 📄 License
 
