@@ -158,13 +158,13 @@ router.get('/', requireAdminAuth, (req, res) => {
 // GET /admin/dashboard - Main dashboard
 router.get('/dashboard', requireAdminAuth, async (req, res) => {
     try {
-        // Get statistics
+        // Get statistics with safe NULL handling
         const stats = await Promise.all([
             database.query('SELECT COUNT(*) as count FROM releases'),
             database.query('SELECT COUNT(*) as count FROM events'),
             database.query('SELECT COUNT(*) as count FROM contacts WHERE status = $1', ['new']),
             database.query('SELECT COUNT(*) as count FROM newsletter'),
-            database.query('SELECT SUM(play_count) as total FROM releases'),
+            database.query('SELECT COALESCE(SUM(play_count), 0) as total FROM releases'),
             database.query('SELECT * FROM releases WHERE featured = true ORDER BY created_at DESC LIMIT 3')
         ]);
         
@@ -361,7 +361,11 @@ router.get('/dashboard', requireAdminAuth, async (req, res) => {
         `);
     } catch (error) {
         logger.error('Error loading dashboard:', error);
-        res.status(500).send('<h1>Error loading dashboard</h1>');
+        res.status(500).send(`
+            <h1>Error loading dashboard</h1>
+            <p>Details: ${error.message}</p>
+            <p><a href="/admin/releases">Go to Releases</a></p>
+        `);
     }
 });
 
@@ -440,6 +444,227 @@ router.get('/releases', requireAdminAuth, async (req, res) => {
     } catch (error) {
         logger.error('Error loading releases:', error);
         res.status(500).send('<h1>Error loading releases</h1>');
+    }
+});
+
+// Events management page
+router.get('/events', requireAdminAuth, async (req, res) => {
+    try {
+        const result = await database.query('SELECT * FROM events ORDER BY event_date DESC');
+        
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Events - CORE64 Admin</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+                <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            </head>
+            <body>
+                <div class="container mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h1><i class="fas fa-calendar me-2"></i>Events</h1>
+                        <div>
+                            <a href="/admin/dashboard" class="btn btn-secondary me-2">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                            </a>
+                            <a href="/admin/events/new" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>New Event
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Location</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${result.rows.map(event => `
+                                    <tr>
+                                        <td><strong>${event.title}</strong></td>
+                                        <td>${event.location || 'N/A'}</td>
+                                        <td>${event.event_date ? new Date(event.event_date).toLocaleDateString() : 'N/A'}</td>
+                                        <td>${event.event_time || 'N/A'}</td>
+                                        <td><span class="badge bg-info">${event.status || 'scheduled'}</span></td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="/admin/events/edit/${event.id}" class="btn btn-outline-primary">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="/admin/events/delete/${event.id}" class="btn btn-outline-danger" 
+                                                   onclick="return confirm('Are you sure you want to delete this event?')">
+                                                    <i class="fas fa-trash"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        ${result.rows.length === 0 ? '<div class="text-center py-4"><p class="text-muted">No events found</p></div>' : ''}
+                    </div>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        logger.error('Error loading events:', error);
+        res.status(500).send('<h1>Error loading events</h1>');
+    }
+});
+
+// Contacts management page
+router.get('/contacts', requireAdminAuth, async (req, res) => {
+    try {
+        const result = await database.query('SELECT * FROM contacts ORDER BY created_at DESC');
+        
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Contacts - CORE64 Admin</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+                <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            </head>
+            <body>
+                <div class="container mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h1><i class="fas fa-envelope me-2"></i>Contact Messages</h1>
+                        <a href="/admin/dashboard" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                        </a>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Subject</th>
+                                    <th>Message</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${result.rows.map(contact => `
+                                    <tr class="${contact.status === 'new' ? 'table-warning' : ''}">
+                                        <td><strong>${contact.name}</strong></td>
+                                        <td>${contact.email}</td>
+                                        <td>${contact.subject || 'N/A'}</td>
+                                        <td>${contact.message.length > 50 ? contact.message.substring(0, 50) + '...' : contact.message}</td>
+                                        <td>
+                                            <span class="badge ${contact.status === 'new' ? 'bg-warning' : contact.status === 'replied' ? 'bg-success' : 'bg-secondary'}">
+                                                ${contact.status || 'new'}
+                                            </span>
+                                        </td>
+                                        <td>${contact.created_at ? new Date(contact.created_at).toLocaleDateString() : 'N/A'}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="/admin/contacts/view/${contact.id}" class="btn btn-outline-primary">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="/admin/contacts/delete/${contact.id}" class="btn btn-outline-danger" 
+                                                   onclick="return confirm('Are you sure you want to delete this message?')">
+                                                    <i class="fas fa-trash"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        ${result.rows.length === 0 ? '<div class="text-center py-4"><p class="text-muted">No contact messages found</p></div>' : ''}
+                    </div>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        logger.error('Error loading contacts:', error);
+        res.status(500).send('<h1>Error loading contacts</h1>');
+    }
+});
+
+// Newsletter management page
+router.get('/newsletter', requireAdminAuth, async (req, res) => {
+    try {
+        const result = await database.query('SELECT * FROM newsletter ORDER BY created_at DESC');
+        
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Newsletter - CORE64 Admin</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+                <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            </head>
+            <body>
+                <div class="container mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h1><i class="fas fa-users me-2"></i>Newsletter Subscribers</h1>
+                        <a href="/admin/dashboard" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                        </a>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Subscribed Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${result.rows.map(subscriber => `
+                                    <tr>
+                                        <td><strong>${subscriber.email}</strong></td>
+                                        <td>
+                                            <span class="badge ${subscriber.status === 'active' ? 'bg-success' : 'bg-secondary'}">
+                                                ${subscriber.status || 'active'}
+                                            </span>
+                                        </td>
+                                        <td>${subscriber.created_at ? new Date(subscriber.created_at).toLocaleDateString() : 'N/A'}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="/admin/newsletter/delete/${subscriber.id}" class="btn btn-outline-danger" 
+                                                   onclick="return confirm('Are you sure you want to remove this subscriber?')">
+                                                    <i class="fas fa-trash"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        ${result.rows.length === 0 ? '<div class="text-center py-4"><p class="text-muted">No newsletter subscribers found</p></div>' : ''}
+                    </div>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        logger.error('Error loading newsletter:', error);
+        res.status(500).send('<h1>Error loading newsletter</h1>');
     }
 });
 
