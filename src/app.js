@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const session = require('express-session');
 require('dotenv').config();
 
 // Import Sentry for error tracking
@@ -11,7 +12,7 @@ const Sentry = require('@sentry/node');
 // Import custom modules
 const logger = require('./utils/logger');
 const database = require('./database/connection');
-const { setupAdmin } = require('./admin/config');
+// const { setupAdmin } = require('./admin/config'); // Disabled AdminJS
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -20,13 +21,14 @@ const eventsRoutes = require('./routes/events');
 const contactRoutes = require('./routes/contact');
 const newsletterRoutes = require('./routes/newsletter');
 const uploadRoutes = require('./routes/upload');
+const adminRoutes = require('./routes/admin'); // Custom admin panel
 
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize Sentry
-if (process.env.SENTRY_DSN) {
+if (process.env.SENTRY_DSN && process.env.SENTRY_DSN !== 'https://your-sentry-dsn-here') {
     Sentry.init({
         dsn: process.env.SENTRY_DSN,
         environment: process.env.NODE_ENV || 'development',
@@ -49,10 +51,32 @@ const limiter = rateLimit({
 // Middleware
 app.use(limiter);
 
-// Setup Admin panel before helmet (CSP)
-setupAdmin(app);
+// Session middleware for admin panel
+app.use(session({
+    secret: process.env.ADMIN_SESSION_SECRET || 'default-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+}));
 
-app.use(helmet());
+// Disabled AdminJS - using custom admin panel instead
+// setupAdmin(app);
+
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+            scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+            fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+            imgSrc: ["'self'", "data:", "https:"],
+        },
+    },
+}));
 app.use(compression());
 app.use(cors({
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -80,6 +104,9 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Custom Admin Panel Routes
+app.use('/admin', adminRoutes);
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/releases', releasesRoutes);
@@ -102,7 +129,7 @@ app.use('*', (req, res, next) => {
 });
 
 // Sentry error handler
-if (process.env.SENTRY_DSN) {
+if (process.env.SENTRY_DSN && process.env.SENTRY_DSN !== 'https://your-sentry-dsn-here') {
     app.use(Sentry.Handlers.errorHandler());
 }
 
