@@ -603,7 +603,7 @@ router.get('/contacts', requireAdminAuth, async (req, res) => {
 // Newsletter management page
 router.get('/newsletter', requireAdminAuth, async (req, res) => {
     try {
-        const result = await database.query('SELECT * FROM newsletter ORDER BY created_at DESC');
+        const result = await database.query('SELECT * FROM newsletter ORDER BY subscribed_at DESC');
         
         res.send(`
             <!DOCTYPE html>
@@ -639,11 +639,11 @@ router.get('/newsletter', requireAdminAuth, async (req, res) => {
                                     <tr>
                                         <td><strong>${subscriber.email}</strong></td>
                                         <td>
-                                            <span class="badge ${subscriber.status === 'active' ? 'bg-success' : 'bg-secondary'}">
-                                                ${subscriber.status || 'active'}
+                                            <span class="badge ${subscriber.is_active ? 'bg-success' : 'bg-secondary'}">
+                                                ${subscriber.is_active ? 'Active' : 'Inactive'}
                                             </span>
                                         </td>
-                                        <td>${subscriber.created_at ? new Date(subscriber.created_at).toLocaleDateString() : 'N/A'}</td>
+                                        <td>${subscriber.subscribed_at ? new Date(subscriber.subscribed_at).toLocaleDateString() : 'N/A'}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
                                                 <a href="/admin/newsletter/delete/${subscriber.id}" class="btn btn-outline-danger" 
