@@ -1,5 +1,14 @@
+// Load environment variables first
+require('dotenv').config();
+
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
+
+// Validate required environment variables
+if (!process.env.DB_PASSWORD) {
+    logger.error('DB_PASSWORD is not set. Please configure it in .env file');
+    throw new Error('DB_PASSWORD environment variable is required');
+}
 
 // Database configuration
 const dbConfig = {
@@ -7,12 +16,22 @@ const dbConfig = {
     port: process.env.DB_PORT || 5432,
     database: process.env.DB_NAME || 'sunfixer_ovm',
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'password',
+    password: process.env.DB_PASSWORD, // No fallback for security
     max: 20, // Maximum number of clients in the pool
     idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
     connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 };
+
+// Log configuration (without sensitive data)
+logger.info('Database configuration loaded:', {
+    host: dbConfig.host,
+    port: dbConfig.port,
+    database: dbConfig.database,
+    user: dbConfig.user,
+    ssl: dbConfig.ssl,
+    passwordSet: !!dbConfig.password
+});
 
 // Create connection pool
 const pool = new Pool(dbConfig);
