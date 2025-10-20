@@ -75,23 +75,39 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
-Minimum required env vars:
+### 3.1 Generate Secrets (REQUIRED)
+Generate ALL 4 secrets before running migrations:
+
+Node (one-liners):
+```bash
+node -e "console.log('JWT_SECRET=' + require('crypto').randomBytes(32).toString('hex'))"
+node -e "console.log('JWT_REFRESH_SECRET=' + require('crypto').randomBytes(32).toString('hex'))"
+node -e "console.log('ADMIN_COOKIE_SECRET=' + require('crypto').randomBytes(32).toString('hex'))"
+node -e "console.log('ADMIN_SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Alternative:
+- OpenSSL: `openssl rand -hex 32`
+- Python: `python -c "import secrets; print(secrets.token_hex(32))"`
+
+Paste the values into `.env`:
 ```
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=sunfixer_ovm
 DB_USER=postgres
 DB_PASSWORD=your_password
-JWT_SECRET=your_jwt_secret
-JWT_REFRESH_SECRET=your_refresh_secret
-ADMIN_COOKIE_SECRET=your_admin_cookie_secret
-ADMIN_SESSION_SECRET=your_admin_session_secret
+JWT_SECRET=your_generated_jwt_secret
+JWT_REFRESH_SECRET=your_generated_refresh_secret
+ADMIN_COOKIE_SECRET=your_generated_admin_cookie_secret
+ADMIN_SESSION_SECRET=your_generated_admin_session_secret
 ```
 
 ### 4. Database Setup
 ```bash
 # Create PostgreSQL database
-createdb sunfixer_ovm
+# Windows: if createdb is not in PATH, use full path or pgAdmin
+createdb -U postgres sunfixer_ovm
 
 # Run migrations
 npm run db:migrate
@@ -99,6 +115,11 @@ npm run db:migrate
 # Seed sample data (creates default admin)
 npm run db:seed
 ```
+
+Troubleshooting auth errors (code 28P01):
+- Ensure `DB_USER`/`DB_PASSWORD` in `.env` match your local PostgreSQL credentials
+- Try: `psql -U postgres -h localhost` to verify the password
+- If needed, reset password: `ALTER USER postgres PASSWORD 'new_password';`
 
 ### 5. Start Development Server
 ```bash
@@ -219,6 +240,11 @@ src/
 - Admin panel is protected; only `role=admin` users can access
 - You can create more admins via `/admin` -> Users
 - Uploads served from `/uploads` path
+
+## ❗ Gotchas / Troubleshooting
+- `createdb: command not found` on Windows: add `C:\\Program Files\\PostgreSQL\\XX\\bin` to PATH or use pgAdmin
+- Auth error `28P01`: check `.env` DB_USER/DB_PASSWORD, verify with `psql -U postgres -h localhost`
+- Ensure all 4 secrets are generated and present in `.env` before migrations
 
 ## 📄 License
 
