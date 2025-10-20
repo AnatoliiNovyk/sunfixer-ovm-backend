@@ -2,6 +2,28 @@
 
 Backend API for the Ukrainian electronic music duo **SunFixer & OVM** and their record label **CORE64 Records**.
 
+## 🎛️ Graphical Admin Panel (NEW)
+A full-featured AdminJS panel is integrated and available at:
+
+- URL: `http://localhost:3000/admin`
+- Auth method: database users (role = `admin`)
+- Default admin after seeding:
+  - Email: `admin@core64records.com`
+  - Password: `admin123!`
+
+Features inside admin:
+- Dashboard with KPIs (releases, events, contacts, subscribers)
+- Users management (admins and users)
+- Releases CRUD (genre, cover/audio URLs, featured, play_count)
+- Events CRUD (date, venue, status)
+- Contacts inbox with status flow (new/read/replied)
+- Newsletter subscribers (export-ready)
+
+Security & sessions:
+- Auth with bcrypt + sessions (express-session)
+- Rate limiting (skips `/admin` UI routes), helmet
+- Role-based access (admin only)
+
 ## 🚀 Features
 
 - **Authentication & Authorization** - JWT-based auth with admin roles
@@ -24,6 +46,7 @@ Backend API for the Ukrainian electronic music duo **SunFixer & OVM** and their 
 - **Bcrypt** - Password hashing
 - **Winston** - Logging
 - **Multer** - File uploads
+- **AdminJS** - Graphical admin panel
 - **Sentry** - Error tracking
 - **Docker** - Containerization
 
@@ -52,6 +75,19 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
+Minimum required env vars:
+```
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=sunfixer_ovm
+DB_USER=postgres
+DB_PASSWORD=your_password
+JWT_SECRET=your_jwt_secret
+JWT_REFRESH_SECRET=your_refresh_secret
+ADMIN_COOKIE_SECRET=your_admin_cookie_secret
+ADMIN_SESSION_SECRET=your_admin_session_secret
+```
+
 ### 4. Database Setup
 ```bash
 # Create PostgreSQL database
@@ -60,7 +96,7 @@ createdb sunfixer_ovm
 # Run migrations
 npm run db:migrate
 
-# Seed sample data
+# Seed sample data (creates default admin)
 npm run db:seed
 ```
 
@@ -69,18 +105,18 @@ npm run db:seed
 npm run dev
 ```
 
-The API will be available at `http://localhost:3000`
+- API: `http://localhost:3000`
+- Admin Panel: `http://localhost:3000/admin`
+- Health: `http://localhost:3000/health`
 
-## 🔑 Authentication
+## 🔑 Authentication (API)
 
-The API uses JWT tokens for authentication. Include the token in the Authorization header:
-
+Include the token in the Authorization header:
 ```bash
 Authorization: Bearer <your_jwt_token>
 ```
 
-### Default Admin User
-After seeding, you can login with:
+Default admin (after seeding):
 ```
 Email: admin@core64records.com
 Password: admin123!
@@ -93,27 +129,27 @@ Password: admin123!
 POST   /api/auth/login         - User login
 POST   /api/auth/register      - User registration
 POST   /api/auth/refresh       - Refresh access token
-GET    /api/auth/me           - Get user profile
-POST   /api/auth/logout       - User logout
+GET    /api/auth/me            - Get user profile
+POST   /api/auth/logout        - User logout
 ```
 
 ### Releases
 ```
-GET    /api/releases          - Get all releases
-GET    /api/releases/:id      - Get specific release
-POST   /api/releases          - Create release (admin)
-PUT    /api/releases/:id      - Update release (admin)
-DELETE /api/releases/:id      - Delete release (admin)
-POST   /api/releases/:id/play - Increment play count
+GET    /api/releases           - Get all releases
+GET    /api/releases/:id       - Get specific release
+POST   /api/releases           - Create release (admin)
+PUT    /api/releases/:id       - Update release (admin)
+DELETE /api/releases/:id       - Delete release (admin)
+POST   /api/releases/:id/play  - Increment play count
 ```
 
 ### Events
 ```
-GET    /api/events           - Get all events
-GET    /api/events/:id       - Get specific event
-POST   /api/events           - Create event (admin)
-PUT    /api/events/:id       - Update event (admin)
-DELETE /api/events/:id       - Delete event (admin)
+GET    /api/events             - Get all events
+GET    /api/events/:id         - Get specific event
+POST   /api/events             - Create event (admin)
+PUT    /api/events/:id         - Update event (admin)
+DELETE /api/events/:id         - Delete event (admin)
 ```
 
 ### Contact & Newsletter
@@ -128,19 +164,61 @@ GET    /api/newsletter                 - Get subscribers (admin)
 
 ### File Upload
 ```
-POST   /api/upload/image      - Upload image (admin)
-POST   /api/upload/audio      - Upload audio (admin)
-GET    /api/upload/images/:filename - Serve image file
-GET    /api/upload/audio/:filename  - Serve audio file
+POST   /api/upload/image               - Upload image (admin)
+POST   /api/upload/audio               - Upload audio (admin)
+GET    /api/upload/images/:filename    - Serve image file
+GET    /api/upload/audio/:filename     - Serve audio file
 ```
 
-## 🚦 Health Check
-
-The API provides a health check endpoint:
+## 🐳 Docker
 
 ```bash
-GET /health
+# Build
+docker build -t sunfixer-ovm-backend .
+
+# Run
+docker run -d \
+  -p 3000:3000 \
+  -e DB_HOST=host.docker.internal \
+  -e DB_NAME=sunfixer_ovm \
+  -e DB_USER=postgres \
+  -e DB_PASSWORD=your_password \
+  -e JWT_SECRET=your_jwt_secret \
+  -e JWT_REFRESH_SECRET=your_refresh_secret \
+  -e ADMIN_COOKIE_SECRET=your_cookie_secret \
+  -e ADMIN_SESSION_SECRET=your_session_secret \
+  --name sunfixer-backend \
+  sunfixer-ovm-backend
 ```
+
+## 🧱 Project Structure (relevant)
+```
+src/
+├── admin/
+│   ├── config.js          # AdminJS setup
+│   └── dashboard.jsx      # Admin dashboard component
+├── app.js                 # Express app (admin mounted at /admin)
+├── database/
+│   ├── connection.js      # PostgreSQL pool
+│   ├── migrate.js         # Migrations
+│   └── seed.js            # Seed (creates default admin)
+├── middleware/
+│   └── auth.js            # JWT auth middleware
+├── routes/
+│   ├── auth.js            # Auth endpoints
+│   ├── releases.js        # Releases CRUD
+│   ├── events.js          # Events CRUD
+│   ├── contact.js         # Contacts
+│   ├── newsletter.js      # Newsletter
+│   └── upload.js          # Upload endpoints
+└── utils/
+    └── logger.js          # Logging
+```
+
+## 📎 Notes
+- Admin panel is protected; only `role=admin` users can access
+- You can create more admins via `/admin` -> Users
+- Uploads served from `/uploads` path
 
 ## 📄 License
 
